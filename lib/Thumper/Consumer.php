@@ -70,9 +70,25 @@ class Consumer extends BaseConsumer
      */
     public function processMessage(AMQPMessage $message)
     {
-        call_user_func($this->callback, $message->body);
-        $message->delivery_info['channel']
-            ->basic_ack($message->delivery_info['delivery_tag']);
+        $outcome = call_user_func($this->callback, $message->body);
+	switch ($outcome) {
+		case -1:
+			/* message malformed or not willing to process: NACK */
+        		$message->delivery_info['channel']
+            			->basic_nack($message->delivery_info['delivery_tag']);
+			break;
+		case 0:
+			/* message processing failed, push back on the queue: REJECT */
+        		$message->delivery_info['channel']
+            			->basic_reject($message->delivery_info['delivery_tag'], true);
+			break;
+		default:
+			/* message processed : ACK */
+        		$message->delivery_info['channel']
+            			->basic_ack($message->delivery_info['delivery_tag']);
+			break;
+
+	}
         $this->consumed++;
         $this->maybeStopConsumer($message);
     }
